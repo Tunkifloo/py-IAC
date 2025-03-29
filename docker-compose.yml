@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  # Aplicación Python Flask
+  app:
+    build: .
+    container_name: python-IAC
+    ports:
+      - "5000:5000"
+    environment:
+      - DEBUG_MODE=False
+      - PORT=5000
+    restart: unless-stopped
+    networks:
+      - app-network
+    depends_on:
+      - jenkins
+
+  # Servicio Jenkins
+  jenkins:
+    image: jenkins/jenkins:lts-jdk17
+    container_name: jenkins
+    user: root  # Necesario para acceder al socket Docker
+    ports:
+      - "8081:8080"  # Puerto web de Jenkins
+      - "50001:50000"  # Puerto para agentes Jenkins
+    volumes:
+      - jenkins_home:/var/jenkins_home  # Persistencia de datos de Jenkins
+      - /var/run/docker.sock:/var/run/docker.sock  # Socket Docker del host
+      - /usr/bin/docker:/usr/bin/docker  # Docker CLI
+    environment:
+      - JENKINS_OPTS="--prefix=/jenkins"
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  jenkins_home:
+    driver: local

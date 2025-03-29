@@ -16,6 +16,13 @@ pipeline {
             }
         }
         
+        stage('Security Scan') {
+            steps {
+                sh 'pip install bandit'
+                sh 'bandit -r app.py'
+            }
+        }
+        
         stage('Build Docker Image') {
             steps {
                 sh 'docker build -t python-demo:${BUILD_NUMBER} .'
@@ -26,9 +33,17 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh '''
+                # Detener y eliminar el contenedor anterior si existe
                 docker stop python-demo || true
                 docker rm python-demo || true
-                docker run -d --name python-demo -p 5000:5000 python-demo:latest
+                
+                # Ejecutar el nuevo contenedor
+                docker run -d --name python-demo \
+                  --network app-network \
+                  -p 5000:5000 \
+                  -e DEBUG_MODE=False \
+                  -e PORT=5000 \
+                  python-demo:latest
                 '''
             }
         }
@@ -40,6 +55,12 @@ pipeline {
         }
         failure {
             echo 'Falló el pipeline'
+        }
+        always {
+            // Limpiar imágenes antiguas
+            sh '''
+            docker image prune -f
+            '''
         }
     }
 }
