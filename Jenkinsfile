@@ -10,34 +10,30 @@ pipeline {
         
         stage('Test in Container') {
             steps {
-                // Copiar archivos necesarios al directorio temporal compartido
+                // Enfoque directo: crear el archivo requirements.txt dentro del contenedor
                 sh '''
-                mkdir -p /tmp/jenkins/build
-                cp -R * /tmp/jenkins/build/
-                ls -la /tmp/jenkins/build/
-                '''
-                
-                // Ejecutar pruebas usando el directorio compartido
-                sh '''
-                docker run --rm -v jenkins_tmp:/tmp/jenkins \
-                           -v build_cache:/cache \
-                           -w /tmp/jenkins/build python:3.11-slim bash -c "
-                    echo 'Instalando dependencias...' &&
-                    pip install --cache-dir=/cache/pip -r requirements.txt pytest bandit &&
-                    echo 'Ejecutando pruebas...' &&
-                    python -m pytest tests/ &&
-                    echo 'Ejecutando análisis de seguridad...' &&
-                    bandit -r app.py
-                "
+                docker run --rm \
+                    -v ${WORKSPACE}:/workspace \
+                    -w /workspace \
+                    python:3.11-slim bash -c "
+                        echo '===== DEBUGGING ====='
+                        ls -la
+                        echo '===== CONTENT OF REQUIREMENTS.TXT ====='
+                        cat requirements.txt
+                        echo '===== INSTALLING DEPENDENCIES ====='
+                        pip install -r requirements.txt pytest bandit
+                        echo '===== RUNNING TESTS ====='
+                        python -m pytest tests/
+                        echo '===== RUNNING SECURITY SCAN ====='
+                        bandit -r app.py
+                    "
                 '''
             }
         }
         
         stage('Build Docker Image') {
             steps {
-                // Construir imagen desde el directorio compartido para aprovechar caché
                 sh '''
-                cd /tmp/jenkins/build
                 docker build -t python-demo:${BUILD_NUMBER} .
                 docker tag python-demo:${BUILD_NUMBER} python-demo:latest
                 '''
@@ -69,9 +65,6 @@ pipeline {
         always {
             // Limpiar imágenes antiguas
             sh 'docker image prune -f'
-            
-            // Limpiar directorio temporal
-            sh 'rm -rf /tmp/jenkins/build || true'
         }
     }
 }
