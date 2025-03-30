@@ -1,52 +1,39 @@
 pipeline {
-    agent {
-        docker {
-            image 'python:3.11-slim'
-            args '-v /var/run/docker.sock:/var/run/docker.sock'
-        }
-    }
+    agent any
     
     stages {
-        stage('Prepare') {
-            steps {
-                sh 'apt-get update && apt-get install -y docker.io'
-            }
-        }
-        
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
         
-        stage('Install Dependencies') {
+        stage('Test in Container') {
             steps {
-                sh 'pip install -r requirements.txt'
-                sh 'pip install pytest bandit'
-            }
-        }
-        
-        stage('Test') {
-            steps {
-                sh 'python -m pytest tests/'
-            }
-        }
-        
-        stage('Security Scan') {
-            steps {
-                sh 'bandit -r app.py'
+                // Ejecutar pruebas en un contenedor Python sin instalar Docker
+                sh '''
+                docker run --rm -v ${WORKSPACE}:/app -w /app python:3.11-slim bash -c "
+                    pip install -r requirements.txt pytest bandit &&
+                    python -m pytest tests/ &&
+                    bandit -r app.py
+                "
+                '''
             }
         }
         
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t python-demo:${BUILD_NUMBER} .'
-                sh 'docker tag python-demo:${BUILD_NUMBER} python-demo:latest'
+                // Construir imagen usando el Docker del host
+                sh '''
+                docker build -t python-demo:${BUILD_NUMBER} .
+                docker tag python-demo:${BUILD_NUMBER} python-demo:latest
+                '''
             }
         }
         
         stage('Deploy') {
             steps {
+                // Desplegar usando el Docker del host
                 sh '''
                 docker stop python-IAC || true
                 docker rm python-IAC || true
