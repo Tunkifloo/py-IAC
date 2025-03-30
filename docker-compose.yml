@@ -10,6 +10,9 @@ services:
     environment:
       - DEBUG_MODE=False
       - PORT=5000
+    volumes:
+      # Volumen para almacenamiento persistente de datos de la aplicación (si es necesario)
+      - app_data:/app/data
     restart: unless-stopped
     networks:
       - app-network
@@ -25,9 +28,16 @@ services:
       - "8081:8080"  # Puerto web de Jenkins
       - "50001:50000"  # Puerto para agentes Jenkins
     volumes:
-      - jenkins_home:/var/jenkins_home  # Persistencia de datos de Jenkins
-      - /var/run/docker.sock:/var/run/docker.sock  # Socket Docker del host
-      - /usr/bin/docker:/usr/bin/docker  # Docker CLI
+      # Persistencia de datos de Jenkins
+      - jenkins_home:/var/jenkins_home
+      # Socket Docker del host - necesario para que Jenkins pueda crear contenedores
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      # Docker CLI - necesario para ejecutar comandos Docker desde Jenkins
+      - /usr/bin/docker:/usr/bin/docker
+      # Directorio para compartir archivos temporales entre Jenkins y contenedores de CI/CD
+      - jenkins_tmp:/tmp/jenkins
+      # Volumen compartido para build artifacts y dependencias
+      - build_cache:/var/jenkins_workspaces
     environment:
       - JENKINS_OPTS="--prefix=/jenkins"
     restart: unless-stopped
@@ -40,4 +50,10 @@ networks:
 
 volumes:
   jenkins_home:
+    driver: local
+  app_data:
+    driver: local
+  jenkins_tmp:
+    driver: local
+  build_cache:
     driver: local

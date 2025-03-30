@@ -8,34 +8,25 @@ pipeline {
             }
         }
         
-        stage('Debug Workspace') {
-            steps {
-                // Explorar el contenido del workspace para debug
-                sh '''
-                echo "Contenido del workspace:"
-                ls -la
-                echo "Verificando si existe requirements.txt:"
-                test -f requirements.txt && echo "Existe" || echo "No existe"
-                '''
-            }
-        }
-        
         stage('Test in Container') {
             steps {
-                // Primero creamos un requirements.txt mínimo si no existe
+                // Copiar archivos necesarios al directorio temporal compartido
                 sh '''
-                if [ ! -f requirements.txt ]; then
-                    echo "Creando archivo requirements.txt mínimo"
-                    echo "flask==2.3.3" > requirements.txt
-                    echo "pytest==7.4.0" >> requirements.txt
-                fi
+                mkdir -p /tmp/jenkins/build
+                cp -R * /tmp/jenkins/build/
+                ls -la /tmp/jenkins/build/
                 '''
                 
-                // Ejecutar pruebas en un contenedor Python
+                // Ejecutar pruebas usando el directorio compartido
                 sh '''
-                docker run --rm -v ${WORKSPACE}:/app -w /app python:3.11-slim bash -c "
-                    pip install -r requirements.txt pytest bandit &&
+                docker run --rm -v jenkins_tmp:/tmp/jenkins \
+                           -v build_cache:/cache \
+                           -w /tmp/jenkins/build python:3.11-slim bash -c "
+                    echo 'Instalando dependencias...' &&
+                    pip install --cache-dir=/cache/pip -r requirements.txt pytest bandit &&
+                    echo 'Ejecutando pruebas...' &&
                     python -m pytest tests/ &&
+                    echo 'Ejecutando análisis de seguridad...' &&
                     bandit -r app.py
                 "
                 '''
@@ -44,8 +35,9 @@ pipeline {
         
         stage('Build Docker Image') {
             steps {
-                // Construir imagen usando el Docker del host
+                // Construir imagen desde el directorio compartido para aprovechar caché
                 sh '''
+                cd /tmp/jenkins/build
                 docker build -t python-demo:${BUILD_NUMBER} .
                 docker tag python-demo:${BUILD_NUMBER} python-demo:latest
                 '''
@@ -54,7 +46,6 @@ pipeline {
         
         stage('Deploy') {
             steps {
-                // Desplegar usando el Docker del host
                 sh '''
                 docker stop python-IAC || true
                 docker rm python-IAC || true
@@ -76,7 +67,11 @@ pipeline {
             echo 'Falló el pipeline'
         }
         always {
+            // Limpiar imágenes antiguas
             sh 'docker image prune -f'
+            
+            // Limpiar directorio temporal
+            sh 'rm -rf /tmp/jenkins/build || true'
         }
     }
 }
