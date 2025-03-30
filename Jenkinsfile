@@ -5,23 +5,31 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+                // Make sure files exist after checkout
+                sh 'ls -la'
+                sh 'pwd'
             }
         }
         
         stage('Test in Container') {
             steps {
-                // Enfoque directo: crear el archivo requirements.txt dentro del contenedor
+                // Create a requirements file first to ensure it exists
+                sh 'cat requirements.txt'
+                
+                // Run tests in container with improved volume mounting
                 sh '''
                 docker run --rm \
-                    -v ${WORKSPACE}:/workspace \
+                    -v "${WORKSPACE}:/workspace:rw" \
                     -w /workspace \
                     python:3.11-slim bash -c "
                         echo '===== DEBUGGING ====='
                         ls -la
+                        pwd
                         echo '===== CONTENT OF REQUIREMENTS.TXT ====='
                         cat requirements.txt
                         echo '===== INSTALLING DEPENDENCIES ====='
-                        pip install -r requirements.txt pytest bandit
+                        pip install -r requirements.txt
+                        pip install pytest bandit
                         echo '===== RUNNING TESTS ====='
                         python -m pytest tests/
                         echo '===== RUNNING SECURITY SCAN ====='
