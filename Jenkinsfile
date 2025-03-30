@@ -8,9 +8,30 @@ pipeline {
             }
         }
         
+        stage('Debug Workspace') {
+            steps {
+                // Explorar el contenido del workspace para debug
+                sh '''
+                echo "Contenido del workspace:"
+                ls -la
+                echo "Verificando si existe requirements.txt:"
+                test -f requirements.txt && echo "Existe" || echo "No existe"
+                '''
+            }
+        }
+        
         stage('Test in Container') {
             steps {
-                // Ejecutar pruebas en un contenedor Python sin instalar Docker
+                // Primero creamos un requirements.txt mínimo si no existe
+                sh '''
+                if [ ! -f requirements.txt ]; then
+                    echo "Creando archivo requirements.txt mínimo"
+                    echo "flask==2.3.3" > requirements.txt
+                    echo "pytest==7.4.0" >> requirements.txt
+                fi
+                '''
+                
+                // Ejecutar pruebas en un contenedor Python
                 sh '''
                 docker run --rm -v ${WORKSPACE}:/app -w /app python:3.11-slim bash -c "
                     pip install -r requirements.txt pytest bandit &&
