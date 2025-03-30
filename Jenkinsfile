@@ -1,24 +1,39 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'python:3.11-slim'
+            args '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
     
     stages {
+        stage('Prepare') {
+            steps {
+                sh 'apt-get update && apt-get install -y docker.io'
+            }
+        }
+        
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
         
+        stage('Install Dependencies') {
+            steps {
+                sh 'pip install -r requirements.txt'
+                sh 'pip install pytest bandit'
+            }
+        }
+        
         stage('Test') {
             steps {
-                sh 'pip install pytest'
-                sh 'pip install -r requirements.txt'
                 sh 'python -m pytest tests/'
             }
         }
         
         stage('Security Scan') {
             steps {
-                sh 'pip install bandit'
                 sh 'bandit -r app.py'
             }
         }
@@ -33,16 +48,12 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh '''
-                # Detener y eliminar el contenedor anterior si existe
-                docker stop python-demo || true
-                docker rm python-demo || true
-                
-                # Ejecutar el nuevo contenedor
-                docker run -d --name python-demo \
-                  --network app-network \
+                docker stop python-IAC || true
+                docker rm python-IAC || true
+                docker run -d --name python-IAC \
+                  --network python-flask-demo_app-network \
                   -p 5000:5000 \
                   -e DEBUG_MODE=False \
-                  -e PORT=5000 \
                   python-demo:latest
                 '''
             }
@@ -57,10 +68,7 @@ pipeline {
             echo 'Falló el pipeline'
         }
         always {
-            // Limpiar imágenes antiguas
-            sh '''
-            docker image prune -f
-            '''
+            sh 'docker image prune -f'
         }
     }
 }
